@@ -1,0 +1,123 @@
+10.10.11.35
+
+Starting Nmap 7.94SVN ( https://nmap.org ) at 2024-09-30 19:46 CEST
+Nmap scan report for 10.10.11.35
+Host is up (0.016s latency).
+Not shown: 989 filtered tcp ports (no-response)
+PORT     STATE SERVICE       VERSION
+53/tcp   open  domain        Simple DNS Plus
+88/tcp   open  kerberos-sec  Microsoft Windows Kerberos (server time: 2024-09-30 22:46:48Z)
+135/tcp  open  msrpc         Microsoft Windows RPC
+139/tcp  open  netbios-ssn   Microsoft Windows netbios-ssn
+389/tcp  open  ldap          Microsoft Windows Active Directory LDAP (Domain: cicada.htb0., Site: Default-First-Site-Name)
+|_ssl-date: TLS randomness does not represent time
+| ssl-cert: Subject: commonName=CICADA-DC.cicada.htb
+| Subject Alternative Name: othername: 1.3.6.1.4.1.311.25.1::<unsupported>, DNS:CICADA-DC.cicada.htb
+| Not valid before: 2024-08-22T20:24:16
+|_Not valid after:  2025-08-22T20:24:16
+445/tcp  open  microsoft-ds?
+464/tcp  open  kpasswd5?
+593/tcp  open  ncacn_http    Microsoft Windows RPC over HTTP 1.0
+636/tcp  open  ssl/ldap      Microsoft Windows Active Directory LDAP (Domain: cicada.htb0., Site: Default-First-Site-Name)
+| ssl-cert: Subject: commonName=CICADA-DC.cicada.htb
+| Subject Alternative Name: othername: 1.3.6.1.4.1.311.25.1::<unsupported>, DNS:CICADA-DC.cicada.htb
+| Not valid before: 2024-08-22T20:24:16
+|_Not valid after:  2025-08-22T20:24:16
+|_ssl-date: TLS randomness does not represent time
+3268/tcp open  ldap          Microsoft Windows Active Directory LDAP (Domain: cicada.htb0., Site: Default-First-Site-Name)
+|_ssl-date: TLS randomness does not represent time
+| ssl-cert: Subject: commonName=CICADA-DC.cicada.htb
+| Subject Alternative Name: othername: 1.3.6.1.4.1.311.25.1::<unsupported>, DNS:CICADA-DC.cicada.htb
+| Not valid before: 2024-08-22T20:24:16
+|_Not valid after:  2025-08-22T20:24:16
+3269/tcp open  ssl/ldap      Microsoft Windows Active Directory LDAP (Domain: cicada.htb0., Site: Default-First-Site-Name)
+| ssl-cert: Subject: commonName=CICADA-DC.cicada.htb
+| Subject Alternative Name: othername: 1.3.6.1.4.1.311.25.1::<unsupported>, DNS:CICADA-DC.cicada.htb
+| Not valid before: 2024-08-22T20:24:16
+|_Not valid after:  2025-08-22T20:24:16
+|_ssl-date: TLS randomness does not represent time
+Service Info: Host: CICADA-DC; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: 4h59m59s
+| smb2-time: 
+|   date: 2024-09-30T22:47:31
+|_  start_date: N/A
+| smb2-security-mode: 
+|   3:1:1: 
+|_    Message signing enabled and required
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 90.97 seconds
+
+On voit qu'il y a du ldap on va essayer de choper des trucs
+
+On tente plusieurs commandes donné par chatgpt parce que j'ai jamais fait de machine AD
+
+On récupère l'information suivante grâce à la commande enum4linux -a 10.10.11.35
+
+Domain Name: CICADA                                                                                                 
+Domain Sid: S-1-5-21-917908876-1423158569-3159038727
+
+On cherche la solution d'ancienne machines afin de savoir la marche à suivre
+
+Il parait qu'elle est ultra simple mais je comprend rien
+
+On utilise un outils nommé nullinux qui permet d'énumérer des informations via SMB
+
+ça nous donne rien de plus que le DN CICADA qu'on avait avant
+
+J'ai essayé tous les outils d'information gathering via smb et je trouve rien
+
+Je retente chatgpt
+
+On tente une énumération avec smbclient
+
+smbclient -L \\\\10.10.11.35\\ -U ""
+
+
+        Sharename       Type      Comment
+        ---------       ----      -------
+        ADMIN$          Disk      Remote Admin
+        C$              Disk      Default share
+        DEV             Disk      
+        HR              Disk      
+        IPC$            IPC       Remote IPC
+        NETLOGON        Disk      Logon server share 
+        SYSVOL          Disk      Logon server share 
+Reconnecting with SMB1 for workgroup listing.
+do_connect: Connection to 10.10.11.35 failed (Error NT_STATUS_RESOURCE_NAME_NOT_FOUND)
+Unable to connect with SMB1 -- no workgroup available
+
+On tente après une énumération ldap
+
+ldapsearch -x -H ldap://10.10.11.35 -b "dc=cicada,dc=htb"
+
+# extended LDIF
+#
+# LDAPv3
+# base <dc=cicada,dc=htb> with scope subtree
+# filter: (objectclass=*)
+# requesting: ALL
+#
+
+# search result
+search: 2
+result: 1 Operations error
+text: 000004DC: LdapErr: DSID-0C090C78, comment: In order to perform this opera
+ tion a successful bind must be completed on the connection., data 0, v4f7c
+
+# numResponses: 1
+
+On peut voir que l'énumération smbclient a révélé 2 shares intéressant DEV et HR
+
+On va essayer de s'y connecter
+
+smbclient //10.10.11.35/DEV -N
+smbclient //10.10.11.35/HR -N
+
+Au sein de DEV on peut rien faire mais dans HR on trouve un fichier
+
+J'arrive pas à récupérer le fichier
+
+
